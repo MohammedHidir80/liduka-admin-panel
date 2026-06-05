@@ -1,0 +1,100 @@
+export const USER_ROLES = {
+  SUPER_ADMIN: 'super_admin',
+  ADMIN: 'admin',
+  MODERATOR: 'moderator',
+  SUPPORT_AGENT: 'support_agent',
+  FINANCE_ADMIN: 'finance_admin',
+  LOGISTICS_ADMIN: 'logistics_admin',
+  VENDOR: 'vendor',
+  BUYER: 'buyer',
+  DELIVERY_PARTNER: 'delivery_partner',
+}
+
+export const ORDER_STATUS = {
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
+  PROCESSING: 'processing',
+  SHIPPED: 'shipped',
+  DELIVERED: 'delivered',
+  CANCELLED: 'cancelled',
+  REFUNDED: 'refunded',
+  DISPUTED: 'disputed',
+}
+
+export const PAYMENT_STATUS = {
+  PENDING: 'pending',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  REFUNDED: 'refunded',
+}
+
+export const PERMISSIONS = {
+  canManageUsers: 'canManageUsers',
+  canManageOrders: 'canManageOrders',
+  canManageProducts: 'canManageProducts',
+  canManageFinance: 'canManageFinance',
+  canManageDelivery: 'canManageDelivery',
+  canManageDisputes: 'canManageDisputes',
+  canManageWithdrawals: 'canManageWithdrawals',
+  canManageAnalytics: 'canManageAnalytics',
+  canManageSettings: 'canManageSettings',
+}
+
+export const DEFAULT_PERMISSIONS = {
+  [USER_ROLES.SUPER_ADMIN]: Object.values(PERMISSIONS).reduce((acc, p) => ({ ...acc, [p]: true }), {}),
+  [USER_ROLES.ADMIN]: {
+    canManageUsers: true,
+    canManageOrders: true,
+    canManageProducts: true,
+    canManageFinance: false,
+    canManageDelivery: true,
+    canManageDisputes: true,
+    canManageWithdrawals: false,
+    canManageAnalytics: true,
+    canManageSettings: false,
+  },
+  [USER_ROLES.MODERATOR]: {
+    canManageUsers: true,
+    canManageOrders: false,
+    canManageProducts: true,
+    canManageFinance: false,
+    canManageDelivery: false,
+    canManageDisputes: true,
+    canManageWithdrawals: false,
+    canManageAnalytics: false,
+    canManageSettings: false,
+  },
+  [USER_ROLES.SUPPORT_AGENT]: {
+    canManageUsers: true,
+    canManageOrders: true,
+    canManageProducts: false,
+    canManageFinance: false,
+    canManageDelivery: false,
+    canManageDisputes: true,
+    canManageWithdrawals: false,
+    canManageAnalytics: false,
+    canManageSettings: false,
+  },
+  [USER_ROLES.FINANCE_ADMIN]: {
+    canManageUsers: false,
+    canManageOrders: false,
+    canManageProducts: false,
+    canManageFinance: true,
+    canManageDelivery: false,
+    canManageDisputes: false,
+    canManageWithdrawals: true,
+    canManageAnalytics: true,
+    canManageSettings: false,
+  },
+  [USER_ROLES.LOGISTICS_ADMIN]: {
+    canManageUsers: false,
+    canManageOrders: true,
+    canManageProducts: false,
+    canManageFinance: false,
+    canManageDelivery: true,
+    canManageDisputes: false,
+    canManageWithdrawals: false,
+    canManageAnalytics: true,
+    canManageSettings: false,
+  },
+}
