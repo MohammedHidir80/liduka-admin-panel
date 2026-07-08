@@ -24,6 +24,7 @@ export default function LoginPage() {
     
     try {
       await loginWithEmail(email, password)
+      await new Promise(resolve => setTimeout(resolve, 100))
       router.push('/admin/dashboard')
     } catch (error) {
       console.error(error)
