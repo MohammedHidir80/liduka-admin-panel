@@ -17,15 +17,18 @@ export default function LoginPage() {
   const router = useRouter()
 
 
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
-    
+
     try {
       await loginWithEmail(email, password)
       await new Promise(resolve => setTimeout(resolve, 100))
-      router.push('/admin/dashboard')
+
+      router.replace('/admin/dashboard')
+      router.refresh()
+
     } catch (error) {
       console.error(error)
     } finally {
