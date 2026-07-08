@@ -22,7 +22,8 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
-  Activity, // 👈 Add icon for live counter
+  Activity,
+  AlertCircle, // 👈 Add icon for live counter
 } from 'lucide-react'
 
 export const navItems = [
@@ -31,6 +32,8 @@ export const navItems = [
   { name: 'Live Counter', href: '/admin/live-counter', icon: Activity, permissions: [] },
   { name: 'Users', href: '/admin/users', icon: Users, permissions: ['canManageUsers'] },
   { name: 'Vendors', href: '/admin/vendors', icon: Store, permissions: ['canManageUsers'] },
+  { name: 'Reports', href: '/admin/reports', icon: AlertCircle, permissions: ['canManageUsers'] },
+
   { name: 'Products', href: '/admin/products', icon: Package, permissions: ['canManageProducts'] },
   { name: 'Orders', href: '/admin/orders', icon: ShoppingCart, permissions: ['canManageOrders'] },
   { name: 'Delivery', href: '/admin/delivery', icon: Truck, permissions: ['canManageDelivery'] },

@@ -66,10 +66,7 @@ export default function LiveCounterPage() {
     };
   }, [authChecking]);
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.push('/admin/login');
-  };
+  
 
   if (authChecking) {
     return (
@@ -84,12 +81,7 @@ export default function LiveCounterPage() {
       {/* Top bar with logout */}
       <div className="flex justify-between items-center max-w-6xl mx-auto mb-6">
         <h1 className="text-white text-xl font-semibold">Live Dashboard</h1>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg text-sm transition"
-        >
-          Logout
-        </button>
+        
       </div>
 
       {/* Main counter card */}
