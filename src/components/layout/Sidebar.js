@@ -43,7 +43,7 @@ export const navItems = [
   { name: 'Categories', href: '/admin/categories', icon: Grid, permissions: [] },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3, permissions: ['canManageAnalytics'] },
   { name: 'Settings', href: '/admin/settings', icon: Settings, permissions: ['canManageSettings'] },
-  { name: 'Admins', href: '/admin/admins', icon: Shield, permissions: [], superAdminOnly: true },
+  { name: 'Admins', href: '/admin/admins', icon: Shield, permissions: ['canManageSettings'], },
 ]
 
 export default function Sidebar() {

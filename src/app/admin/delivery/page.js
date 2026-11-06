@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import {
   collection,
+  getDoc,
   getDocs,
   query,
   where,
@@ -34,12 +35,15 @@ import {
   AlertCircle,
   User,
   Lock,
-  PlusCircle
+  PlusCircle,
+  Save,
+  Settings
 } from 'lucide-react'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { db, secondaryAuth } from '@/lib/firebase'
 import toast from 'react-hot-toast'
 import { cn } from '@/utils/cn'
+import useAuthStore from '@/store/authStore'
 
 // Helpers
 const formatDate = (date) => {
@@ -49,6 +53,13 @@ const formatDate = (date) => {
   } catch {
     return 'N/A'
   }
+}
+
+// Partner regions can be an array, a plain string, or the older single `region` field
+const regionList = (p) => {
+  const r = p?.regions ?? p?.region
+  if (Array.isArray(r)) return r.filter(Boolean)
+  return r ? [String(r)] : []
 }
 
 const formatGHS = (amount) => `₵${Number(amount || 0).toLocaleString()}`
@@ -204,7 +215,7 @@ function ReassignModal({ isOpen, onClose, order, partners, onReassign }) {
                       <option value="">Choose a partner</option>
                       {partners.map(p => (
                         <option key={p.id} value={p.id}>
-                          {p.fullName} ({p.region}) - {p.isAvailable ? 'Available' : 'Unavailable'}
+                          {p.fullName} ({regionList(p).join(', ') || 'N/A'}) - {p.isAvailable ? 'Available' : 'Unavailable'}
                         </option>
                       ))}
                     </select>
@@ -239,7 +250,7 @@ function StatusModal({ isOpen, onClose, order, onUpdateStatus }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (newStatus === order.deliveryStatus) {
-      toast.info('Status unchanged')
+      toast('Status unchanged')
       onClose()
       return
     }
@@ -553,6 +564,110 @@ function AddPartnerForm({ onSuccess }) {
 }
 
 // ------------------------------
+// Delivery Mode Panel (settings/delivery)
+// ------------------------------
+const DELIVERY_MODES = [
+  {
+    value: 'vendor',
+    title: 'Vendor arranged',
+    text: 'No delivery fee at checkout. The vendor contacts the buyer to arrange delivery, and the buyer pays the rider directly.'
+  },
+  {
+    value: 'platform',
+    title: 'Delivery platform',
+    text: 'Orders are assigned a delivery partner and a shipment is created for the delivery app. Fees come from the delivery zones.'
+  }
+]
+
+function DeliveryModePanel() {
+  const { user, adminData } = useAuthStore()
+  const [mode, setMode] = useState('vendor')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  // Only runs when this tab is opened: one read
+  useEffect(() => {
+    getDoc(doc(db, 'settings', 'delivery'))
+      .then((snap) => setMode(snap.exists() && snap.data().mode === 'platform' ? 'platform' : 'vendor'))
+      .catch((e) => {
+        console.error(e)
+        toast.error('Failed to load delivery mode')
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await setDoc(
+        doc(db, 'settings', 'delivery'),
+        { mode, updatedAt: serverTimestamp(), updatedBy: adminData?.uid || user?.uid || null },
+        { merge: true }
+      )
+      toast.success('Delivery mode updated. Shoppers pick it up within about 10 minutes.')
+    } catch (e) {
+      console.error(e)
+      toast.error('Failed to save delivery mode')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="card p-10 text-center">
+        <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4" />
+        <p>Loading delivery mode...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-3xl space-y-6">
+      <div className="card p-8 space-y-4">
+        <div>
+          <h2 className="text-xl font-bold">Delivery Mode</h2>
+          <p className="text-sm text-gray-500 mt-1">Choose how new marketplace orders get delivered.</p>
+        </div>
+
+        {DELIVERY_MODES.map((m) => (
+          <button
+            key={m.value}
+            type="button"
+            onClick={() => setMode(m.value)}
+            className={cn(
+              'w-full text-left rounded-xl border-2 p-5 transition',
+              mode === m.value ? 'border-red-600 bg-red-50 dark:bg-red-900/10' : 'border-gray-200 hover:border-gray-300'
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <Truck className="w-5 h-5" />
+              <span className="font-semibold text-lg">{m.title}</span>
+              {mode === m.value && <span className="ml-auto text-xs font-bold text-red-600">SELECTED</span>}
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">{m.text}</p>
+          </button>
+        ))}
+
+        <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2">
+          <Save className="w-4 h-4" />
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+
+      <div className="card p-5 bg-yellow-50 border border-yellow-200 text-sm text-gray-600">
+        Switching only affects <b>new</b> orders. If the document is missing, the marketplace uses <b>Vendor arranged</b>.
+        <pre className="mt-3 bg-white p-3 rounded-lg overflow-auto">{`settings
+└── delivery
+    ├── mode: "vendor" | "platform"
+    ├── updatedAt
+    └── updatedBy`}</pre>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------
 // Main Delivery Page (with Tabs)
 // ------------------------------
 export default function DeliveryPage() {
@@ -566,13 +681,13 @@ export default function DeliveryPage() {
 
   const { partners, orders, loading, error, refresh, reassignOrder, updateDeliveryStatus } = useDeliveryData(refreshKey)
 
-  const regions = [...new Set(partners.map(p => p.region).filter(Boolean))]
+  const regions = [...new Set(partners.flatMap(p => regionList(p)))]
 
   const filteredPartners = partners.filter(partner => {
     const matchesSearch = partner.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       partner.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       partner.phone?.includes(searchTerm)
-    const matchesRegion = regionFilter === 'all' || partner.region === regionFilter
+    const matchesRegion = regionFilter === 'all' || regionList(partner).includes(regionFilter)
     return matchesSearch && matchesRegion
   })
 
@@ -625,6 +740,15 @@ export default function DeliveryPage() {
           )}>
             <PlusCircle className="w-4 h-4 inline mr-2" />
             Add Partner
+          </Tab>
+          <Tab className={({ selected }) => cn(
+            "w-full rounded-lg py-2.5 text-sm font-medium leading-5 focus:outline-none",
+            selected
+              ? "bg-white dark:bg-gray-700 shadow text-primary-700"
+              : "text-gray-600 hover:bg-white/[0.12] hover:text-gray-800"
+          )}>
+            <Settings className="w-4 h-4 inline mr-2" />
+            Delivery Mode
           </Tab>
         </Tab.List>
 
@@ -707,7 +831,7 @@ export default function DeliveryPage() {
                         <div>
                           <h3 className="font-semibold text-lg">{partner.fullName}</h3>
                           <div className="flex flex-wrap gap-3 text-sm text-gray-500 mt-1">
-                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {partner.region || 'N/A'}</span>
+                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {regionList(partner).join(', ') || 'N/A'}</span>
                             <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {partner.phone}</span>
                             <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {partner.email}</span>
                             <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" /> Base: {formatGHS(partner.basePrice)}</span>
@@ -799,6 +923,11 @@ export default function DeliveryPage() {
           {/* Add Partner Panel */}
           <Tab.Panel>
             <AddPartnerForm onSuccess={handleRefresh} />
+          </Tab.Panel>
+
+          {/* Delivery Mode Panel */}
+          <Tab.Panel>
+            <DeliveryModePanel />
           </Tab.Panel>
         </Tab.Panels>
       </Tab.Group>
