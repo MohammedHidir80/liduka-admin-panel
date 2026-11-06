@@ -575,7 +575,7 @@ const DELIVERY_MODES = [
   {
     value: 'platform',
     title: 'Delivery platform',
-    text: 'Orders are assigned a delivery partner and a shipment is created for the delivery app. Fees come from the delivery zones.'
+    text: 'An open shipment is created for the delivery app and a rider accepts it. Fees come from the Delivery Zones tab.'
   }
 ]
 
@@ -668,6 +668,206 @@ function DeliveryModePanel() {
 }
 
 // ------------------------------
+// Delivery Zones Panel (settings/deliveryZones)
+// ------------------------------
+const DEFAULT_ZONES = {
+  northern: {
+    name: 'Northern',
+    districts: [
+      { label: 'Tamale Metro', value: 'tamale_metro', deliveryFee: 15, available: true },
+      { label: 'Sagnarigu', value: 'sagnarigu', deliveryFee: 5, available: true },
+      { label: 'Yendi Municipal', value: 'yendi', deliveryFee: 25, available: true },
+      { label: 'Gushegu', value: 'gushegu', deliveryFee: 0, available: false },
+      { label: 'Karaga', value: 'karaga', deliveryFee: 0, available: false },
+      { label: 'Mion', value: 'mion', deliveryFee: 0, available: false },
+      { label: 'Nanton', value: 'nanton', deliveryFee: 20, available: true },
+      { label: 'Savelugu', value: 'savelugu', deliveryFee: 17, available: true },
+      { label: 'Tolon', value: 'tolon', deliveryFee: 16, available: true },
+      { label: 'Zabzugu', value: 'zabzugu', deliveryFee: 0, available: false },
+      { label: 'Tatale Sanguli', value: 'tatale_sanguli', deliveryFee: 0, available: false },
+      { label: 'Kpandai', value: 'kpandai', deliveryFee: 0, available: false },
+      { label: 'Bimbilla', value: 'bimbilla', deliveryFee: 22, available: true }
+    ]
+  }
+}
+
+const slug = (s) => String(s || '').toLowerCase().replace(/\s*region\s*$/, '').trim().replace(/[\s-]+/g, '_').replace(/[^a-z0-9_]/g, '')
+
+function DeliveryZonesPanel() {
+  const { user, adminData } = useAuthStore()
+  const [regions, setRegions] = useState(null)
+  const [current, setCurrent] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [newRegion, setNewRegion] = useState('')
+  const [newDistrict, setNewDistrict] = useState('')
+
+  // Only runs when this tab is opened: one read
+  useEffect(() => {
+    getDoc(doc(db, 'settings', 'deliveryZones'))
+      .then((snap) => {
+        const r = snap.exists() && snap.data().regions ? snap.data().regions : DEFAULT_ZONES
+        setRegions(r)
+        setCurrent(Object.keys(r)[0] || '')
+        setDirty(!snap.exists())
+      })
+      .catch((e) => {
+        console.error(e)
+        toast.error('Failed to load delivery zones')
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const update = (fn) => {
+    setRegions((prev) => {
+      const next = JSON.parse(JSON.stringify(prev))
+      fn(next)
+      return next
+    })
+    setDirty(true)
+  }
+
+  const region = regions?.[current]
+  const setDistrict = (i, patch) => update((r) => Object.assign(r[current].districts[i], patch))
+
+  const addRegion = () => {
+    const key = slug(newRegion)
+    if (!key) return toast.error('Enter a region name')
+    if (regions[key]) return toast.error('Region already exists')
+    update((r) => { r[key] = { name: newRegion.trim(), districts: [] } })
+    setCurrent(key)
+    setNewRegion('')
+  }
+
+  const addDistrict = () => {
+    const value = slug(newDistrict)
+    if (!value) return toast.error('Enter a district name')
+    if (region.districts.some((d) => d.value === value)) return toast.error('District already exists')
+    update((r) => r[current].districts.push({ label: newDistrict.trim(), value, deliveryFee: 0, available: false }))
+    setNewDistrict('')
+  }
+
+  const save = async () => {
+    for (const [k, r] of Object.entries(regions)) {
+      for (const d of r.districts) {
+        if (d.available && !(Number(d.deliveryFee) > 0)) return toast.error(`${d.label} (${r.name}): set a fee above 0 or turn it off`)
+      }
+    }
+    setSaving(true)
+    try {
+      await setDoc(doc(db, 'settings', 'deliveryZones'), {
+        regions,
+        updatedAt: serverTimestamp(),
+        updatedBy: adminData?.uid || user?.uid || null
+      })
+      setDirty(false)
+      toast.success('Delivery zones saved. Shoppers pick it up within about 10 minutes.')
+    } catch (e) {
+      console.error(e)
+      toast.error('Failed to save delivery zones')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading || !regions) {
+    return (
+      <div className="card p-10 text-center">
+        <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4" />
+        <p>Loading delivery zones...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-4xl space-y-6">
+      <div className="card p-6 space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold">Delivery Zones</h2>
+            <p className="text-sm text-gray-500 mt-1">Used in Delivery Platform mode. A district must be turned on and have a fee to receive orders.</p>
+          </div>
+          <button onClick={save} disabled={saving || !dirty} className="btn-primary flex items-center gap-2">
+            <Save className="w-4 h-4" />
+            {saving ? 'Saving...' : dirty ? 'Save Changes' : 'Saved'}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(regions).map(([k, r]) => (
+            <button
+              key={k}
+              onClick={() => setCurrent(k)}
+              className={cn('px-3 py-1.5 rounded-lg text-sm font-medium border', current === k ? 'bg-red-600 text-white border-red-600' : 'border-gray-300')}
+            >
+              {r.name}
+            </button>
+          ))}
+          <div className="flex gap-2">
+            <input className="input !py-1.5 !text-sm" placeholder="New region" value={newRegion} onChange={(e) => setNewRegion(e.target.value)} />
+            <button onClick={addRegion} className="btn-secondary !py-1.5 text-sm">Add</button>
+          </div>
+        </div>
+
+        {region && (
+          <>
+            <div className="divide-y divide-gray-100 dark:divide-gray-700 border rounded-xl">
+              {region.districts.length === 0 && <p className="p-4 text-sm text-gray-500">No districts yet.</p>}
+              {region.districts.map((d, i) => (
+                <div key={d.value} className="flex flex-wrap items-center gap-3 p-3">
+                  <div className="flex-1 min-w-[140px]">
+                    <p className="font-medium">{d.label}</p>
+                    <p className="text-xs text-gray-400">{d.value}</p>
+                  </div>
+                  <label className="flex items-center gap-1 text-sm">
+                    ₵
+                    <input
+                      type="number" min="0" step="0.5"
+                      className="input !py-1 !w-24 !text-sm"
+                      value={d.deliveryFee ?? 0}
+                      onChange={(e) => setDistrict(i, { deliveryFee: Number(e.target.value) || 0 })}
+                    />
+                  </label>
+                  <button
+                    onClick={() => setDistrict(i, { available: !d.available })}
+                    className={cn('px-3 py-1 rounded-full text-xs font-bold', d.available ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}
+                  >
+                    {d.available ? 'Available' : 'Off'}
+                  </button>
+                  <button
+                    onClick={() => update((r) => r[current].districts.splice(i, 1))}
+                    className="text-xs text-red-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input className="input flex-1" placeholder={`Add a district in ${region.name}`} value={newDistrict} onChange={(e) => setNewDistrict(e.target.value)} />
+              <button onClick={addDistrict} className="btn-secondary">Add district</button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="card p-5 bg-yellow-50 border border-yellow-200 text-sm text-gray-600">
+        Switching a district on or off only affects <b>new</b> orders. The marketplace address form must offer the same district
+        (its <code>value</code> above) for customers to pick it. The server checks every order against this table.
+        <pre className="mt-3 bg-white p-3 rounded-lg overflow-auto">{`settings
+└── deliveryZones
+    ├── regions
+    │   └── northern: { name, districts: [{ label, value, deliveryFee, available }] }
+    ├── updatedAt
+    └── updatedBy`}</pre>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------
 // Main Delivery Page (with Tabs)
 // ------------------------------
 export default function DeliveryPage() {
@@ -750,6 +950,15 @@ export default function DeliveryPage() {
             <Settings className="w-4 h-4 inline mr-2" />
             Delivery Mode
           </Tab>
+          <Tab className={({ selected }) => cn(
+            "w-full rounded-lg py-2.5 text-sm font-medium leading-5 focus:outline-none",
+            selected
+              ? "bg-white dark:bg-gray-700 shadow text-primary-700"
+              : "text-gray-600 hover:bg-white/[0.12] hover:text-gray-800"
+          )}>
+            <MapPin className="w-4 h-4 inline mr-2" />
+            Delivery Zones
+          </Tab>
         </Tab.List>
 
         <Tab.Panels className="mt-6">
@@ -775,7 +984,7 @@ export default function DeliveryPage() {
               <div className="card p-6">
                 <Clock className="w-8 h-8 text-purple-500 mb-2" />
                 <p className="text-sm text-gray-500">Pending Deliveries</p>
-                <p className="text-2xl font-bold">{orders.filter(o => o.deliveryStatus && o.deliveryStatus !== 'delivered').length}</p>
+                <p className="text-2xl font-bold">{orders.filter(o => o.deliveryStatus && !['delivered', 'vendor_arranged', 'cancelled'].includes(o.deliveryStatus)).length}</p>
               </div>
             </div>
 
@@ -928,6 +1137,11 @@ export default function DeliveryPage() {
           {/* Delivery Mode Panel */}
           <Tab.Panel>
             <DeliveryModePanel />
+          </Tab.Panel>
+
+          {/* Delivery Zones Panel */}
+          <Tab.Panel>
+            <DeliveryZonesPanel />
           </Tab.Panel>
         </Tab.Panels>
       </Tab.Group>
